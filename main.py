@@ -96,6 +96,266 @@ def login_page():
     return render_template('login.html')
 
 
+@app.route('/admin-dashboard')
+def admin_dashboard():
+    user_id = session.get('user_id')
+    if not user_id:
+        return "<h1>Please log in to access the admin dashboard.</h1><a href='/'>Login</a>"
+    user = User.query.filter_by(user_id=user_id).first()
+    if not user or user.role != 'admin':
+        return "<h1>Unauthorized access. Admins only.</h1><a href='/'>Login</a>"
+    return render_template('admin_dashboard.html')
+
+# API Endpoints
+@app.route('/api/admin/users', methods=['GET'])
+def get_users():
+    users = User.query.filter(User.role != 'admin').all()
+    return jsonify([{
+        'user_id': user.user_id,
+        'email_id': user.email_id,
+        'name': user.name,
+        'qualification': user.qualification,
+        'dob': user.dob,
+        'role': user.role
+    } for user in users]), 200
+
+@app.route('/api/admin/subjects', methods=['GET', 'POST'])
+def manage_subjects():
+    if request.method == 'GET':
+        subjects = Subject.query.all()
+        return jsonify([{
+            'subject_id': subject.subject_id,
+            'name': subject.name,
+            'description': subject.description
+        } for subject in subjects]), 200
+    elif request.method == 'POST':
+        data = request.get_json()
+        name = data.get('name')
+        description = data.get('description')
+        if not name or not description:
+            return jsonify({'message': 'Name and description are required'}), 400
+        if Subject.query.filter_by(name=name).first():
+            return jsonify({'message': 'Subject name already exists'}), 400
+        if Subject.query.filter_by(description=description).first():
+            return jsonify({'message': 'Subject description already exists'}), 400
+        new_subject = Subject(name=name, description=description)
+        db.session.add(new_subject)
+        db.session.commit()
+        return jsonify({'message': 'Subject created successfully'}), 201
+
+@app.route('/api/admin/subjects/<int:subject_id>', methods=['PUT', 'DELETE'])
+def edit_delete_subject(subject_id):
+    subject = Subject.query.get(subject_id)
+    if not subject:
+        return jsonify({'message': 'Subject not found'}), 404
+    if request.method == 'PUT':
+        data = request.get_json()
+        name = data.get('name')
+        description = data.get('description')
+        if not name or not description:
+            return jsonify({'message': 'Name and description are required'}), 400
+        if name != subject.name and Subject.query.filter_by(name=name).first():
+            return jsonify({'message': 'Subject name already exists'}), 400
+        if description != subject.description and Subject.query.filter_by(description=description).first():
+            return jsonify({'message': 'Subject description already exists'}), 400
+        subject.name = name
+        subject.description = description
+        db.session.commit()
+        return jsonify({'message': 'Subject updated successfully'}), 200
+    elif request.method == 'DELETE':
+        db.session.delete(subject)
+        db.session.commit()
+        return jsonify({'message': 'Subject deleted successfully'}), 200
+
+@app.route('/api/admin/chapters', methods=['GET', 'POST'])
+def manage_chapters():
+    if request.method == 'GET':
+        chapters = Chapter.query.all()
+        return jsonify([{
+            'chapter_id': chapter.chapter_id,
+            'name': chapter.name,
+            'description': chapter.description,
+            'subject_id': chapter.subject_id
+        } for chapter in chapters]), 200
+    elif request.method == 'POST':
+        data = request.get_json()
+        name = data.get('name')
+        description = data.get('description')
+        subject_id = data.get('subject_id')
+        if not name or not description or not subject_id:
+            return jsonify({'message': 'Name, description, and subject_id are required'}), 400
+        if not Subject.query.get(subject_id):
+            return jsonify({'message': 'Subject not found'}), 404
+        new_chapter = Chapter(name=name, description=description, subject_id=subject_id)
+        db.session.add(new_chapter)
+        db.session.commit()
+        return jsonify({'message': 'Chapter created successfully'}), 201
+
+@app.route('/api/admin/chapters/<int:chapter_id>', methods=['PUT', 'DELETE'])
+def edit_delete_chapter(chapter_id):
+    chapter = Chapter.query.get(chapter_id)
+    if not chapter:
+        return jsonify({'message': 'Chapter not found'}), 404
+    if request.method == 'PUT':
+        data = request.get_json()
+        name = data.get('name')
+        description = data.get('description')
+        subject_id = data.get('subject_id')
+        if not name or not description or not subject_id:
+            return jsonify({'message': 'Name, description, and subject_id are required'}), 400
+        if not Subject.query.get(subject_id):
+            return jsonify({'message': 'Subject not found'}), 404
+        chapter.name = name
+        chapter.description = description
+        chapter.subject_id = subject_id
+        db.session.commit()
+        return jsonify({'message': 'Chapter updated successfully'}), 200
+    elif request.method == 'DELETE':
+        db.session.delete(chapter)
+        db.session.commit()
+        return jsonify({'message': 'Chapter deleted successfully'}), 200
+
+@app.route('/api/admin/quizzes', methods=['GET', 'POST'])
+def manage_quizzes():
+    if request.method == 'GET':
+        quizzes = Quiz.query.all()
+        return jsonify([{
+            'quiz_id': quiz.quiz_id,
+            'name': quiz.name,
+            'chapter_id': quiz.chapter_id
+        } for quiz in quizzes]), 200
+    elif request.method == 'POST':
+        data = request.get_json()
+        name = data.get('name')
+        chapter_id = data.get('chapter_id')
+        if not Chapter.query.get(chapter_id):
+            return jsonify({'message': 'Chapter not found'}), 404
+        new_quiz = Quiz(name=name, chapter_id=chapter_id)
+        db.session.add(new_quiz)
+        db.session.commit()
+        return jsonify({'message': 'Quiz created successfully', 'quiz_id': new_quiz.quiz_id}), 201
+
+@app.route('/api/admin/quizzes/<int:quiz_id>', methods=['PUT', 'DELETE'])
+def edit_delete_quiz(quiz_id):
+    quiz = Quiz.query.get(quiz_id)
+    if not quiz:
+        return jsonify({'message': 'Quiz not found'}), 404
+    if request.method == 'PUT':
+        data = request.get_json()
+        name = data.get('name')
+        chapter_id = data.get('chapter_id')
+        if not Chapter.query.get(chapter_id):
+            return jsonify({'message': 'Chapter not found'}), 404
+        quiz.name = name
+        quiz.chapter_id = chapter_id
+        db.session.commit()
+        return jsonify({'message': 'Quiz updated successfully'}), 200
+    elif request.method == 'DELETE':
+        db.session.delete(quiz)
+        db.session.commit()
+        return jsonify({'message': 'Quiz deleted successfully'}), 200
+
+@app.route('/api/admin/questions', methods=['GET', 'POST'])
+def manage_questions():
+    if request.method == 'GET':
+        questions = Question.query.all()
+        return jsonify([{
+            'question_id': question.question_id,
+            'quiz_id': question.quiz_id,
+            'question_statement': question.question_statement,
+            'option_1': question.option_1,
+            'option_2': question.option_2,
+            'correct_option': question.correct_option
+        } for question in questions]), 200
+    elif request.method == 'POST':
+        data = request.get_json()
+        quiz_id = data.get('quiz_id')
+        question_statement = data.get('question_statement')
+        option_1 = data.get('option_1')
+        option_2 = data.get('option_2')
+        correct_option = data.get('correct_option')
+        if not all([quiz_id, question_statement, option_1, option_2, correct_option]):
+            return jsonify({'message': 'All fields are required'}), 400
+        if not Quiz.query.get(quiz_id):
+            return jsonify({'message': 'Quiz not found'}), 404
+        if Question.query.filter_by(question_statement=question_statement).first():
+            return jsonify({'message': 'Question statement already exists'}), 400
+        if correct_option not in [option_1, option_2]:
+            return jsonify({'message': 'Correct option must match one of the provided options'}), 400
+        new_question = Question(
+            quiz_id=quiz_id,
+            question_statement=question_statement,
+            option_1=option_1,
+            option_2=option_2,
+            correct_option=correct_option
+        )
+        db.session.add(new_question)
+        db.session.commit()
+        return jsonify({'message': 'Question created successfully'}), 201
+
+@app.route('/api/admin/questions/<int:question_id>', methods=['PUT', 'DELETE'])
+def edit_delete_question(question_id):
+    question = Question.query.get(question_id)
+    if not question:
+        return jsonify({'message': 'Question not found'}), 404
+    if request.method == 'PUT':
+        data = request.get_json()
+        quiz_id = data.get('quiz_id')
+        question_statement = data.get('question_statement')
+        option_1 = data.get('option_1')
+        option_2 = data.get('option_2')
+        correct_option = data.get('correct_option')
+        if not all([quiz_id, question_statement, option_1, option_2, correct_option]):
+            return jsonify({'message': 'All fields are required'}), 400
+        if not Quiz.query.get(quiz_id):
+            return jsonify({'message': 'Quiz not found'}), 404
+        if question_statement != question.question_statement and Question.query.filter_by(question_statement=question_statement).first():
+            return jsonify({'message': 'Question statement already exists'}), 400
+        if correct_option not in [option_1, option_2]:
+            return jsonify({'message': 'Correct option must match one of the provided options'}), 400
+        question.quiz_id = quiz_id
+        question.question_statement = question_statement
+        question.option_1 = option_1
+        question.option_2 = option_2
+        question.correct_option = correct_option
+        db.session.commit()
+        return jsonify({'message': 'Question updated successfully'}), 200
+    elif request.method == 'DELETE':
+        db.session.delete(question)
+        db.session.commit()
+        return jsonify({'message': 'Question deleted successfully'}), 200
+
+@app.route('/api/admin/search', methods=['GET'])
+def search():
+    query = request.args.get('query', '').lower()
+    users = User.query.filter(
+        (db.func.lower(User.user_id).like(f'%{query}%')) |
+        (db.func.lower(User.email_id).like(f'%{query}%')) |
+        (db.func.lower(User.name).like(f'%{query}%'))
+    ).all()
+    subjects = Subject.query.filter(
+        (db.func.lower(Subject.name).like(f'%{query}%')) |
+        (db.func.lower(Subject.description).like(f'%{query}%'))
+    ).all()
+    quizzes = Quiz.query.filter(
+        (db.func.lower(Quiz.name).like(f'%{query}%'))
+    ).all()
+    return jsonify({
+        'users': [{'user_id': user.user_id, 'email_id': user.email_id, 'name': user.name} for user in users],
+        'subjects': [{'subject_id': subject.subject_id, 'name': subject.name, 'description': subject.description} for subject in subjects],
+        'quizzes': [{'quiz_id': quiz.quiz_id, 'name': quiz.name, 'chapter_id': quiz.chapter_id} for quiz in quizzes]
+    }), 200
+
+@app.route('/api/admin/summary', methods=['GET'])
+def summary():
+    user_count = User.query.count()
+    subject_count = Subject.query.count()
+    quiz_count = Quiz.query.count()
+    return jsonify({
+        'user_count': user_count,
+        'subject_count': subject_count,
+        'quiz_count': quiz_count
+    }), 200
 
 @app.route('/api/register', methods=['POST'])
 def register():
