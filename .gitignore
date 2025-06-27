@@ -1,0 +1,52 @@
+# Python-related ignores
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# SQLite database and related files
+quiz.db
+quiz.sqbpro
+
+# Node.js/VueJS build artifacts (if using Vue CLI)
+node_modules/
+dist/
+build/
+*.log
+
+# IDE-specific files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+
+# Redis and Celery temporary files
+registration_log.txt
+*.pid
+*.sock
+
+# Secret keys and sensitive data
+config.py
+*.env
+
+# Flask-specific
+instance/
+*.sqlite3
+*.db
+
+# Compiled VueJS files (if manually placed in static/js)
+static/js/*.js
+static/js/*.map
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
