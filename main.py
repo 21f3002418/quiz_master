@@ -95,6 +95,33 @@ def login_page():
         return "<h1>Invalid credentials</h1><a href='/login'>Try again</a>"
     return render_template('login.html')
 
+@app.route('/dashboard')
+def redirect_dashboard():
+    return redirect(url_for('user_dashboard'))
+
+@app.route('/user-dashboard')
+def user_dashboard():
+    user_id = session.get('user_id')
+    if not user_id:
+        return "<h1>Please log in to access the dashboard.</h1><a href='/'>Login</a>"
+    user = User.query.filter_by(user_id=user_id).first()
+    if not user:
+        return "<h1>User data not found.</h1><a href='/'>Login</a>"
+    if user.role == 'admin':
+        return redirect(url_for('admin_dashboard'))
+    if redis_client:
+        try:
+            user_data = redis_client.get(f"user:{user_id}")
+            if user_data:
+                user = json.loads(user_data)
+                print(f"User data fetched from Redis: {user}")
+                return render_template('user_dashboard.html', user_name=user['name'], user_id=user_id)
+        except redis.ConnectionError as e:
+            print(f"Redis error in user_dashboard: {e}")
+    if user:
+        print(f"User data fetched from database: {user.user_id}, {user.name}")
+        return render_template('user_dashboard.html', user_name=user.name, user_id=user_id)
+    return "<h1>User data not found.</h1><a href='/'>Login</a>"
 
 @app.route('/admin-dashboard')
 def admin_dashboard():
@@ -456,6 +483,27 @@ def login():
     else:
         print(f"Invalid password for user: {user_id}")
         return jsonify({'message': 'Invalid username or password'}), 401
+
+@app.route('/api/user/subjects')
+def get_subjects():
+    subjects = Subject.query.all()
+    return jsonify([{'subject_id': s.subject_id, 'name': s.name, 'description': s.description} for s in subjects])
+
+@app.route('/api/user/chapters')
+def get_chapters():
+    chapters = Chapter.query.all()
+    return jsonify([{'chapter_id': c.chapter_id, 'name': c.name, 'description': c.description, 'subject_id': c.subject_id} for c in chapters])
+
+@app.route('/api/user/quizzes')
+def get_quizzes():
+    quizzes = Quiz.query.all()
+    return jsonify([{'quiz_id': q.quiz_id, 'name': q.name, 'chapter_id': q.chapter_id} for q in quizzes])
+
+@app.route('/api/user/questions')
+def get_questions():
+    quiz_id = request.args.get('quiz_id')
+    questions = Question.query.filter_by(quiz_id=quiz_id).all()
+    return jsonify([{'question_id': q.question_id, 'question_statement': q.question_statement, 'option_1': q.option_1, 'option_2': q.option_2, 'correct_option': q.correct_option, 'quiz_id': q.quiz_id} for q in questions])
 
 
 @app.route('/logout')
