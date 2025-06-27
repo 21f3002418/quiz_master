@@ -505,6 +505,76 @@ def get_questions():
     questions = Question.query.filter_by(quiz_id=quiz_id).all()
     return jsonify([{'question_id': q.question_id, 'question_statement': q.question_statement, 'option_1': q.option_1, 'option_2': q.option_2, 'correct_option': q.correct_option, 'quiz_id': q.quiz_id} for q in questions])
 
+@app.route('/api/user/scores', methods=['POST'])
+def save_score():
+    data = request.get_json()
+    if not data or 'quiz_id' not in data or 'user_id' not in data or 'total_score' not in data or 'time_stamp_of_attempt' not in data:
+        return jsonify({'message': 'Missing required fields'}), 400
+    
+    try:
+        quiz = Quiz.query.get(data['quiz_id'])
+        if not quiz:
+            return jsonify({'message': 'Invalid quiz_id'}), 400
+
+        try:
+            time_stamp = datetime.strptime(data['time_stamp_of_attempt'], '%Y-%m-%dT%H:%M:%S.%fZ')
+        except ValueError:
+            return jsonify({'message': 'Invalid time_stamp_of_attempt format'}), 400
+
+        score = Score(
+            quiz_id=data['quiz_id'],
+            user_id=data['user_id'],
+            total_score=data['total_score'],
+            time_stamp_of_attempt=time_stamp
+        )
+        db.session.add(score)
+        db.session.commit()
+        return jsonify({'message': 'Score saved successfully'}), 200
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error: {str(e)}")
+        print(traceback.format_exc())
+        return jsonify({'message': f'Failed to save score: {str(e)}'}), 500
+
+@app.route('/api/user/scores')
+def get_scores():
+    user_id = request.args.get('user_id')
+    if not user_id:
+        return jsonify({'message': 'User ID required'}), 400
+    try:
+        scores = Score.query.filter_by(user_id=user_id).all()
+        result = []
+        for score in scores:
+            quiz = Quiz.query.get(score.quiz_id)
+            if quiz:
+                chapter = Chapter.query.get(quiz.chapter_id)
+                if chapter:
+                    subject = Subject.query.get(chapter.subject_id)
+                    subject_name = subject.name if subject else 'Unknown'
+                    chapter_name = chapter.name if chapter else 'Unknown'
+                else:
+                    subject_name = 'Unknown'
+                    chapter_name = 'Unknown'
+            else:
+                subject_name = 'Unknown'
+                chapter_name = 'Unknown'
+            total_questions = Question.query.filter_by(quiz_id=score.quiz_id).count() or 1
+            result.append({
+                'score_id': score.score_id,
+                'quiz_id': score.quiz_id,
+                'user_id': score.user_id,
+                'total_score': score.total_score,
+                'time_stamp_of_attempt': score.time_stamp_of_attempt.isoformat() + 'Z',
+                'subject_name': subject_name,
+                'chapter_name': chapter_name,
+                'total_questions': total_questions,
+                'quiz_name': quiz.name if quiz else 'Unknown'
+            })
+        return jsonify(result)
+    except Exception as e:
+        print(f"Error fetching scores: {str(e)}")
+        print(traceback.format_exc())
+        return jsonify({'message': f'Failed to fetch scores: {str(e)}'}), 500
 
 @app.route('/logout')
 def logout():
